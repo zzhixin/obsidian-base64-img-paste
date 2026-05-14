@@ -41,17 +41,12 @@ const IMAGE_DATA_URL_PATTERN = /data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9
 const QUOTE_CITATION_PREFIX_PATTERN = /^>\s?\[@/;
 const deferredPasteEffect = StateEffect.define<{ placeholder: string; text: string }>();
 const internalPasteAnnotation = Annotation.define<boolean>();
-const DEBUG_PREFIX = "[base64-img-paste]";
 
 export default class Base64ImagePastePlugin extends Plugin {
   settings: Base64ImagePasteSettings;
 
   async onload() {
     await this.loadSettings();
-    this.debug("plugin loaded", {
-      imageFolder: this.settings.imageFolder,
-      defaultImageCaption: this.settings.defaultImageCaption
-    });
 
     this.registerEditorExtension([
       Prec.highest(
@@ -74,10 +69,6 @@ export default class Base64ImagePastePlugin extends Plugin {
             for (const transaction of update.transactions) {
               for (const effect of transaction.effects) {
                 if (effect.is(deferredPasteEffect)) {
-                  this.plugin.debug("deferred paste effect observed", {
-                    placeholder: effect.value.placeholder,
-                    textPreview: effect.value.text.slice(0, 120)
-                  });
                   void this.plugin.resolveDeferredPaste(update.view, effect.value);
                 }
               }
@@ -97,56 +88,10 @@ export default class Base64ImagePastePlugin extends Plugin {
     );
 
     this.registerDomEvent(
-      window,
-      "keydown",
-      (event: KeyboardEvent) => {
-        this.logGlobalKeyboardEvent("window keydown", event);
-      },
-      { capture: true }
-    );
-
-    this.registerDomEvent(
       document,
       "keydown",
       (event: KeyboardEvent) => {
-        this.logGlobalKeyboardEvent("document keydown", event);
         void this.handleDocumentKeydown(event);
-      },
-      { capture: true }
-    );
-
-    this.registerDomEvent(
-      document,
-      "keypress",
-      (event: KeyboardEvent) => {
-        this.logGlobalKeyboardEvent("document keypress", event);
-      },
-      { capture: true }
-    );
-
-    this.registerDomEvent(
-      document,
-      "keyup",
-      (event: KeyboardEvent) => {
-        this.logGlobalKeyboardEvent("document keyup", event);
-      },
-      { capture: true }
-    );
-
-    this.registerDomEvent(
-      document,
-      "beforeinput",
-      (event: InputEvent) => {
-        this.logInputEvent("document beforeinput", event);
-      },
-      { capture: true }
-    );
-
-    this.registerDomEvent(
-      document,
-      "input",
-      (event: InputEvent) => {
-        this.logInputEvent("document input", event);
       },
       { capture: true }
     );
@@ -163,37 +108,21 @@ export default class Base64ImagePastePlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
-    this.debug("settings saved", {
-      imageFolder: this.settings.imageFolder,
-      defaultImageCaption: this.settings.defaultImageCaption
-    });
   }
 
   private async handlePaste(event: ClipboardEvent) {
-    this.debug("document paste captured", {
-      defaultPrevented: event.defaultPrevented,
-      target: this.describeEventTarget(event.target)
-    });
-
     const editor = this.getActiveMarkdownEditor();
     if (!editor) {
-      this.debug("document paste ignored because no focused markdown editor");
       return;
     }
 
     const clipboardText = event.clipboardData?.getData("text/plain") ?? "";
     if (!clipboardText) {
-      this.debug("document paste had no text/plain payload");
       return;
     }
 
     const images = this.findBase64Images(clipboardText);
     const shouldInsertQuoteCallout = this.shouldInsertQuoteCallout(clipboardText);
-    this.debug("document paste analyzed", {
-      textPreview: clipboardText.slice(0, 120),
-      imageCount: images.length,
-      shouldInsertQuoteCallout
-    });
     if (images.length === 0 && !shouldInsertQuoteCallout) {
       return;
     }
@@ -207,31 +136,17 @@ export default class Base64ImagePastePlugin extends Plugin {
         images,
         shouldInsertQuoteCallout
       );
-      this.debug("document paste replacement prepared", {
-        replacementPreview: replacement.slice(0, 120)
-      });
       editor.replaceSelection(replacement);
       if (images.length > 0) {
         new Notice(`已保存 ${images.length} 张 base64 图片`);
       }
     } catch (error) {
-      this.debug("document paste failed", { error });
       console.error("Base64 image paste failed", error);
       new Notice("剪切板内容处理失败，未插入原始 base64 内容");
     }
   }
 
   private handleEditorKeydown(event: KeyboardEvent, view: EditorView): boolean {
-    this.debug("editor keydown captured", {
-      key: event.key,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      altKey: event.altKey,
-      shiftKey: event.shiftKey,
-      hasFocus: view.hasFocus,
-      isFatCursor: view.dom.classList.contains("cm-fat-cursor")
-    });
-
     if (
       event.key !== "p" ||
       event.ctrlKey ||
@@ -244,20 +159,14 @@ export default class Base64ImagePastePlugin extends Plugin {
       return false;
     }
 
-    this.debug("vim p candidate detected");
     const info = view.state.field(editorInfoField, false);
     const editor = info?.editor;
     if (!editor || !navigator.clipboard?.readText) {
-      this.debug("vim p candidate aborted", {
-        hasEditor: Boolean(editor),
-        hasClipboardReadText: Boolean(navigator.clipboard?.readText)
-      });
       return false;
     }
 
     event.preventDefault();
     event.stopPropagation();
-    this.debug("vim p intercepted before default handling");
     void this.handleVimPasteFromClipboard(editor);
     return true;
   }
@@ -280,54 +189,34 @@ export default class Base64ImagePastePlugin extends Plugin {
     }
 
     const isVimNormalMode = this.isEventFromVimNormalMode(event);
-    this.debug("document keydown vim check", {
-      isVimNormalMode,
-      target: this.describeEventTarget(event.target),
-      activeElement: this.describeEventTarget(document.activeElement),
-      composedPath: this.describeEventPath(event),
-      ancestorChain: this.describeAncestorChain(event.target)
-    });
-
     if (!isVimNormalMode || !navigator.clipboard?.readText) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
-    this.debug("document keydown intercepted vim p");
     await this.handleVimPasteFromClipboard(editor);
   }
 
   private async handleVimPasteFromClipboard(editor: Editor) {
     try {
-      this.debug("reading clipboard for vim p");
       const clipboardText = await navigator.clipboard.readText();
       if (!clipboardText) {
-        this.debug("clipboard read for vim p returned empty text");
         return;
       }
 
       const images = this.findBase64Images(clipboardText);
       const shouldInsertQuoteCallout = this.shouldInsertQuoteCallout(clipboardText);
-      this.debug("vim p clipboard analyzed", {
-        textPreview: clipboardText.slice(0, 120),
-        imageCount: images.length,
-        shouldInsertQuoteCallout
-      });
       const replacement =
         images.length > 0 || shouldInsertQuoteCallout
           ? await this.transformClipboardText(clipboardText, images, shouldInsertQuoteCallout)
           : clipboardText;
 
-      this.debug("vim p replacement prepared", {
-        replacementPreview: replacement.slice(0, 120)
-      });
       this.insertTextForVimPaste(editor, replacement);
       if (images.length > 0) {
         new Notice(`已保存 ${images.length} 张 base64 图片`);
       }
     } catch (error) {
-      this.debug("vim p clipboard handling failed", { error });
       console.error("Vim paste takeover failed", error);
       new Notice("Vim p 接管失败");
     }
@@ -335,7 +224,6 @@ export default class Base64ImagePastePlugin extends Plugin {
 
   private filterPasteTransaction(tr: Transaction): TransactionSpec | readonly TransactionSpec[] {
     if (tr.annotation(internalPasteAnnotation)) {
-      this.debug("transaction filter skipped internal transaction");
       return tr;
     }
 
@@ -343,30 +231,18 @@ export default class Base64ImagePastePlugin extends Plugin {
       return tr;
     }
 
-    this.debug("transaction filter saw input.paste", {
-      docChanged: tr.docChanged
-    });
     const pastedChange = this.getSinglePastedChange(tr);
     if (!pastedChange) {
-      this.debug("transaction filter could not extract a single pasted change");
       return tr;
     }
 
     const images = this.findBase64Images(pastedChange.text);
     const shouldInsertQuoteCallout = this.shouldInsertQuoteCallout(pastedChange.text);
-    this.debug("transaction filter analyzed pasted change", {
-      from: pastedChange.from,
-      to: pastedChange.to,
-      textPreview: pastedChange.text.slice(0, 120),
-      imageCount: images.length,
-      shouldInsertQuoteCallout
-    });
     if (images.length === 0 && !shouldInsertQuoteCallout) {
       return tr;
     }
 
     if (images.length === 0) {
-      this.debug("transaction filter replacing quote-only paste inline");
       return {
         changes: {
           from: pastedChange.from,
@@ -377,9 +253,6 @@ export default class Base64ImagePastePlugin extends Plugin {
     }
 
     const placeholder = this.createDeferredPastePlaceholder();
-    this.debug("transaction filter replacing paste with deferred placeholder", {
-      placeholder
-    });
     return {
       changes: {
         from: pastedChange.from,
@@ -425,14 +298,9 @@ export default class Base64ImagePastePlugin extends Plugin {
     view: EditorView,
     payload: { placeholder: string; text: string }
   ): Promise<void> {
-    this.debug("resolving deferred paste", {
-      placeholder: payload.placeholder,
-      textPreview: payload.text.slice(0, 120)
-    });
     const images = this.findBase64Images(payload.text);
     const shouldInsertQuoteCallout = this.shouldInsertQuoteCallout(payload.text);
     if (images.length === 0 && !shouldInsertQuoteCallout) {
-      this.debug("deferred paste no longer matched transform rules");
       return;
     }
 
@@ -445,18 +313,10 @@ export default class Base64ImagePastePlugin extends Plugin {
       const currentText = view.state.doc.toString();
       const from = currentText.indexOf(payload.placeholder);
       if (from === -1) {
-        this.debug("deferred paste placeholder not found in document", {
-          placeholder: payload.placeholder
-        });
         return;
       }
 
       const to = from + payload.placeholder.length;
-      this.debug("deferred paste replacing placeholder", {
-        from,
-        to,
-        replacementPreview: replacement.slice(0, 120)
-      });
       view.dispatch({
         changes: { from, to, insert: replacement },
         selection: EditorSelection.cursor(from + replacement.length),
@@ -467,7 +327,6 @@ export default class Base64ImagePastePlugin extends Plugin {
         new Notice(`已保存 ${images.length} 张 base64 图片`);
       }
     } catch (error) {
-      this.debug("deferred paste failed", { error });
       console.error("Deferred base64 image paste failed", error);
       new Notice("Vim 粘贴处理失败，已保留占位符避免插入原始 base64 内容");
     }
@@ -490,13 +349,6 @@ export default class Base64ImagePastePlugin extends Plugin {
       lineText.length === 0 ? cursorOffset : Math.min(cursorOffset + 1, editor.getValue().length);
     const insertPosition = editor.offsetToPos(insertOffset);
 
-    this.debug("insertTextForVimPaste", {
-      cursor,
-      cursorOffset,
-      insertOffset,
-      insertPosition,
-      textPreview: text.slice(0, 120)
-    });
     editor.replaceRange(text, insertPosition, insertPosition);
     editor.setCursor(editor.offsetToPos(insertOffset + text.length));
   }
@@ -526,11 +378,6 @@ export default class Base64ImagePastePlugin extends Plugin {
     images: ImageMatch[],
     shouldInsertQuoteCallout: boolean
   ): Promise<string> {
-    this.debug("transformClipboardText start", {
-      textPreview: text.slice(0, 120),
-      imageCount: images.length,
-      shouldInsertQuoteCallout
-    });
     let transformedText = text;
 
     if (images.length > 0) {
@@ -541,9 +388,6 @@ export default class Base64ImagePastePlugin extends Plugin {
       transformedText = this.insertQuoteCallout(transformedText);
     }
 
-    this.debug("transformClipboardText done", {
-      replacementPreview: transformedText.slice(0, 120)
-    });
     return transformedText;
   }
 
@@ -561,10 +405,6 @@ export default class Base64ImagePastePlugin extends Plugin {
 
       const pngData = await this.toPngArrayBuffer(image);
       const imagePath = await this.savePngImage(pngData);
-      this.debug("image saved for replacement", {
-        mimeType: image.mimeType,
-        imagePath
-      });
       replacements.set(image.source, this.buildImageEmbed(imagePath));
     }
 
@@ -674,70 +514,6 @@ export default class Base64ImagePastePlugin extends Plugin {
     });
   }
 
-  private debug(message: string, details?: unknown) {
-    if (details === undefined) {
-      console.log(`${DEBUG_PREFIX} ${message}`);
-      return;
-    }
-
-    console.log(`${DEBUG_PREFIX} ${message}`, details);
-  }
-
-  private logGlobalKeyboardEvent(label: string, event: KeyboardEvent) {
-    if (event.key.toLowerCase() !== "p" && event.key !== "Enter") {
-      return;
-    }
-
-    this.debug(label, {
-      key: event.key,
-      code: event.code,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      altKey: event.altKey,
-      shiftKey: event.shiftKey,
-      defaultPrevented: event.defaultPrevented,
-      target: this.describeEventTarget(event.target),
-      activeElement: this.describeEventTarget(document.activeElement),
-      composedPath: this.describeEventPath(event)
-    });
-  }
-
-  private logInputEvent(label: string, event: InputEvent) {
-    if (!event.inputType.includes("paste") && event.data !== "p") {
-      return;
-    }
-
-    this.debug(label, {
-      inputType: event.inputType,
-      data: event.data,
-      defaultPrevented: event.defaultPrevented,
-      target: this.describeEventTarget(event.target),
-      activeElement: this.describeEventTarget(document.activeElement)
-    });
-  }
-
-  private describeEventTarget(target: EventTarget | null): string {
-    if (!(target instanceof HTMLElement)) {
-      return String(target);
-    }
-
-    const classes = target.className ? `.${String(target.className).trim().replace(/\s+/g, ".")}` : "";
-    return `${target.tagName.toLowerCase()}${classes}`;
-  }
-
-  private describeEventPath(event: Event): string[] {
-    return event
-      .composedPath()
-      .slice(0, 6)
-      .map((item) => {
-        if (item instanceof HTMLElement) {
-          return this.describeEventTarget(item);
-        }
-
-        return item instanceof Window ? "window" : item instanceof Document ? "document" : String(item);
-      });
-  }
-
   private isEventFromVimNormalMode(event: KeyboardEvent): boolean {
     const activeElement = document.activeElement;
     const eventTarget = event.target;
@@ -753,22 +529,6 @@ export default class Base64ImagePastePlugin extends Plugin {
     }
 
     return editorElement.querySelector(".cm-fat-cursor") !== null;
-  }
-
-  private describeAncestorChain(target: EventTarget | null): string[] {
-    if (!(target instanceof HTMLElement)) {
-      return [];
-    }
-
-    const chain: string[] = [];
-    let current: HTMLElement | null = target;
-
-    for (let index = 0; current && index < 6; index += 1) {
-      chain.push(this.describeEventTarget(current));
-      current = current.parentElement;
-    }
-
-    return chain;
   }
 }
 
