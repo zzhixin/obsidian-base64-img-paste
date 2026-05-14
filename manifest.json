@@ -1,0 +1,10 @@
+{
+  "id": "base64-img-paste",
+  "name": "Base64 Image Paste",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Intercepts pasted base64 image data, saves it as PNG, and inserts Markdown image embeds.",
+  "author": "zhixin",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}

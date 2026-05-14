@@ -1,0 +1,27 @@
+{
+  "name": "obsidian-base64-img-paste",
+  "version": "0.1.0",
+  "description": "Obsidian plugin that converts pasted base64 image data URLs into saved PNG embeds.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "typecheck": "tsc -noEmit -skipLibCheck"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "base64",
+    "paste",
+    "image"
+  ],
+  "author": "zhixin",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.20.1",
+    "obsidian": "^1.5.3",
+    "typescript": "^5.3.3"
+  }
+}
