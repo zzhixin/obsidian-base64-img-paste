@@ -161,7 +161,7 @@ export default class Base64ImagePastePlugin extends Plugin {
 
     const info = view.state.field(editorInfoField, false);
     const editor = info?.editor;
-    if (!editor || !navigator.clipboard?.readText) {
+    if (!editor || editor.somethingSelected() || !navigator.clipboard?.readText) {
       return false;
     }
 
@@ -184,7 +184,7 @@ export default class Base64ImagePastePlugin extends Plugin {
     }
 
     const editor = this.getActiveMarkdownEditor();
-    if (!editor) {
+    if (!editor || editor.somethingSelected()) {
       return;
     }
 
